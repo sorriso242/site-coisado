@@ -25,6 +25,7 @@ const productsGrid = document.getElementById('productsGrid');
 const searchInput = document.getElementById('searchInput');
 const searchBtn = document.getElementById('searchBtn');
 const countrySelect = document.getElementById('countrySelect');
+const pPriceInput = document.getElementById('pPrice');
 const labelPrice = document.getElementById('labelPrice');
 const heroSubtitle = document.getElementById('heroSubtitle');
 
@@ -46,12 +47,33 @@ const detailLocation = document.getElementById('detailLocation');
 
 let paisAtual = localStorage.getItem('desapega_pais') || 'BR';
 countrySelect.value = paisAtual;
-let unsubscribeRealtime = null; // Guardar a conexão ativa da nuvem
+let unsubscribeRealtime = null;
+
+// MÁSCARA DE FORMATAÇÃO DE MOEDA EM TEMPO REAL (Ex: 100.000.000)
+pPriceInput.addEventListener('input', (e) => {
+    let valor = e.target.value.replace(/\D/g, ""); // Remove tudo que não for número
+    
+    if (valor === "") {
+        e.target.value = "";
+        return;
+    }
+
+    // Transforma em formato numérico decimal
+    let numero = (parseFloat(valor) / 100).toFixed(2);
+    
+    // Aplica a formatação visual baseada no país selecionado
+    if (paisAtual === 'BR') {
+        e.target.value = parseFloat(numero).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    } else {
+        e.target.value = parseFloat(numero).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+});
 
 // CONFIGURAR IDIOMA/MOEDA E SINCRONIZAR COM O FIREBASE EM TEMPO REAL
 function configurarPaisESincronizar(pais) {
     paisAtual = pais;
     localStorage.setItem('desapega_pais', pais);
+    pPriceInput.value = ""; // Limpa para evitar conflito de moedas
     
     if (pais === 'BR') {
         labelPrice.textContent = "Preço (R$)";
@@ -63,10 +85,8 @@ function configurarPaisESincronizar(pais) {
         heroSubtitle.textContent = "O mercado de desapegos mais rápido, seguro e moderno de Portugal.";
     }
 
-    // Fecha a conexão antiga antes de abrir uma nova se trocar de país
     if (unsubscribeRealtime) unsubscribeRealtime();
 
-    // 🔥 CONEXÃO EM TEMPO REAL COM O FIRESTORE
     const q = query(collection(db, `anuncios_${paisAtual}`), orderBy("timestamp", "desc"));
     
     unsubscribeRealtime = onSnapshot(q, (snapshot) => {
@@ -99,7 +119,7 @@ function renderizarProdutos(lista) {
             </div>
             <div class="product-info">
                 <h4 class="product-title">${prod.titulo}</h4>
-                <p class="product-price">${prod.preco} ${simboloMoeda}</p>
+                <p class="product-price">${simboloMoeda} ${prod.preco}</p>
                 <p class="product-location">${prod.localizacao}</p>
                 <button class="btn-edit-prod" style="display: ${isAdminMode ? 'inline-block' : 'none'};">✏️ Editar</button>
             </div>
@@ -108,11 +128,13 @@ function renderizarProdutos(lista) {
     });
 }
 
-// Inicializar aplicativo com o país padrão
 configurarPaisESincronizar(paisAtual);
 
 // GESTÃO DO MODAL
-openModalBtn.addEventListener('click', () => announceModal.classList.add('active'));
+openModalBtn.addEventListener('click', () => {
+    pPriceInput.value = ""; 
+    announceModal.classList.add('active');
+});
 closeModalBtn.addEventListener('click', () => announceModal.classList.remove('active'));
 window.addEventListener('click', (e) => { if (e.target === announceModal) announceModal.classList.remove('active'); });
 
@@ -142,14 +164,13 @@ botoesCategorias.forEach(botao => {
     });
 });
 
-// EVENTOS NOS CARDS (VER DETALHES, APAGAR E EDITAR NA NUVEM)
+// EVENTOS NOS CARDS (VER DETALHES, APAGAR E EDITAR)
 productsGrid.addEventListener('click', async (e) => {
     const card = e.target.closest('.product-card');
     if (!card) return;
     
     const idProd = card.getAttribute('data-id');
 
-    // APAGAR DO FIRESTORE (Apenas no Modo Admin)
     if (e.target.classList.contains('btn-delete-prod')) {
         e.stopPropagation();
         if (confirm("Deseja realmente apagar este anúncio de forma GLOBAL?")) {
@@ -162,16 +183,15 @@ productsGrid.addEventListener('click', async (e) => {
         return;
     }
 
-    // EDITAR NO FIRESTORE (Apenas no Modo Admin)
     if (e.target.classList.contains('btn-edit-prod')) {
         e.stopPropagation();
         const novoTitulo = prompt("Novo título do produto:");
-        const novoPreco = prompt(`Novo preço (Apenas números):`);
+        const novoPreco = prompt("Novo preço (Use o formato formatado ex: 2.500,00):");
         const novaLocalidade = prompt("Nova cidade:");
 
         const dadosAtualizados = {};
         if (novoTitulo) dadosAtualizados.titulo = novoTitulo;
-        if (novoPreco) dadosAtualizados.preco = parseFloat(novoPreco).toLocaleString(paisAtual === 'BR' ? 'pt-BR' : 'pt-PT');
+        if (novoPreco) dadosAtualizados.preco = novoPreco;
         if (novaLocalidade) dadosAtualizados.localizacao = "📍 " + novaLocalidade;
 
         if (Object.keys(dadosAtualizados).length > 0) {
@@ -184,7 +204,6 @@ productsGrid.addEventListener('click', async (e) => {
         return;
     }
 
-    // ABRIR TELA DE DETALHES
     const titulo = card.querySelector('.product-title').textContent;
     const preco = card.querySelector('.product-price').textContent;
     const local = card.querySelector('.product-location').textContent;
@@ -218,7 +237,7 @@ announceForm.addEventListener('submit', async (e) => {
     e.preventDefault();
 
     const titulo = document.getElementById('pTitle').value;
-    const preco = parseFloat(document.getElementById('pPrice').value).toLocaleString(paisAtual === 'BR' ? 'pt-BR' : 'pt-PT');
+    const preco = pPriceInput.value; // Salva o valor exatamente com os pontos inseridos na máscara
     const categoria = document.getElementById('pCategory').value;
     const localizacao = "📍 " + document.getElementById('pLocation').value;
     let urlImagem = document.getElementById('pImgUrl').value.trim();
@@ -233,7 +252,7 @@ announceForm.addEventListener('submit', async (e) => {
         categoria: categoria,
         localizacao: localizacao,
         imagem: urlImagem,
-        timestamp: Date.now() // Ordenação por mais recente
+        timestamp: Date.now()
     };
 
     try {
@@ -246,7 +265,22 @@ announceForm.addEventListener('submit', async (e) => {
     }
 });
 
-// PAINEL ADMINISTRADOR (Senha: admin123)
+// 🔑 COMBINAÇÃO SECRETA PARA O ADMIN (Apenas você sabe)
+// Pressione simultaneamente no seu teclado: Ctrl + Shift + A
+window.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        // Revela o botão secreto no rodapé da página
+        if (adminAccessBtn.style.display === 'none') {
+            adminAccessBtn.style.display = 'inline-block';
+            alert("🔒 Botão de acesso do Administrador revelado no rodapé!");
+        } else {
+            adminAccessBtn.style.display = 'none';
+        }
+    }
+});
+
+// AÇÃO DO PAINEL ADMINISTRADOR (Senha: admin123)
 adminAccessBtn.addEventListener('click', () => {
     if (!isAdminMode) {
         const senha = prompt("Digite a senha do Administrador:");
@@ -254,7 +288,7 @@ adminAccessBtn.addEventListener('click', () => {
             isAdminMode = true;
             adminBadge.style.display = 'inline-block';
             adminAccessBtn.textContent = "🔓 Sair do Admin";
-            configurarPaisESincronizar(paisAtual); // Atualiza os botões de controle na tela
+            configurarPaisESincronizar(paisAtual);
         } else {
             alert("Senha incorreta!");
         }
@@ -262,6 +296,7 @@ adminAccessBtn.addEventListener('click', () => {
         isAdminMode = false;
         adminBadge.style.display = 'none';
         adminAccessBtn.textContent = "🔒 Painel Admin";
+        adminAccessBtn.style.display = 'none'; // Esconde o botão novamente ao sair
         configurarPaisESincronizar(paisAtual);
     }
 });
