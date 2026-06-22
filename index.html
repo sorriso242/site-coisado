@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DesapegaGeral | Marketplace Premium</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght=400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <header class="main-header">
+        <div class="header-container">
+            <h1 class="logo">Desapega<span>Geral</span></h1>
+            
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="O que você deseja comprar hoje?">
+                <button id="searchBtn">Buscar</button>
+            </div>
+
+            <div class="header-actions">
+                <select id="countrySelect" class="country-select">
+                    <option value="BR">🇧🇷 Brasil (R$)</option>
+                    <option value="PT">🇵🇹 Portugal (€)</option>
+                </select>
+                <button class="btn-announce" id="openModalBtn">+ Anunciar</button>
+            </div>
+        </div>
+    </header>
+
+    <section class="hero-section">
+        <div class="hero-container">
+            <div class="hero-content">
+                <h2>Desapegue do que não usa mais.<br>Encontre o que precisa.</h2>
+                <p id="heroSubtitle">O mercado de desapegos mais rápido, seguro e moderno do país.</p>
+                <button class="hero-btn" onclick="document.getElementById('openModalBtn').click()">Começar a Vender Agora</button>
+            </div>
+        </div>
+    </section>
+
+    <section class="categories-section">
+        <div class="container">
+            <h3 class="section-title">Explorar Categorias</h3>
+            <div class="categories-grid">
+                <div class="category-card"><span class="cat-icon">📱</span> Eletrônicos</div>
+                <div class="category-card"><span class="cat-icon">🚗</span> Veículos</div>
+                <div class="category-card"><span class="cat-icon">👕</span> Moda & Estilo</div>
+                <div class="category-card"><span class="cat-icon">🏠</span> Imóveis</div>
+            </div>
+        </div>
+    </section>
+
+    <main class="products-section">
+        <div class="container">
+            <div class="section-header-flex">
+                <h3 class="section-title">Anúncios em Destaque</h3>
+                <span id="adminBadge" class="admin-badge" style="display: none;">Modo Administrador Ativo</span>
+            </div>
+            <div class="products-grid" id="productsGrid">
+                </div>
+        </div>
+    </main>
+
+    <main class="product-details-page" id="productDetailsPage" style="display: none;">
+        <div class="container">
+            <button class="btn-back" id="btnBackToList">← Voltar para os anúncios</button>
+            
+            <div class="details-wrapper">
+                <div class="details-image-box">
+                    <img src="" id="detailImg" alt="Imagem do Produto">
+                </div>
+                <div class="details-info-box">
+                    <span class="product-tag" id="detailTag">Categoria</span>
+                    <h2 id="detailTitle" class="detail-main-title">Título do Produto</h2>
+                    <p class="product-price" id="detailPrice">0</p>
+                    <p class="product-location" id="detailLocation">📍 Localização</p>
+                    
+                    <div class="seller-box">
+                        <h5>Vendedor verificado</h5>
+                        <button class="btn-chat" onclick="alert('Chat iniciado com o vendedor! (Simulado)')">💬 Chat com o Vendedor</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div class="modal-overlay" id="announceModal">
+        <div class="modal-box">
+            <span class="close-modal" id="closeModalBtn">&times;</span>
+            <h2>Criar Novo Anúncio</h2>
+            <form id="announceForm">
+                <label for="pTitle">Título do Anúncio</label>
+                <input type="text" id="pTitle" placeholder="Ex: Bicicleta de Trilha" required>
+
+                <label for="pPrice" id="labelPrice">Preço (R$)</label>
+                <input type="number" id="pPrice" placeholder="Ex: 120" required>
+
+                <label for="pCategory">Categoria</label>
+                <select id="pCategory">
+                    <option value="Eletrônicos">Eletrônicos</option>
+                    <option value="Veículos">Veículos</option>
+                    <option value="Moda & Estilo">Moda & Estilo</option>
+                    <option value="Imóveis">Imóveis</option>
+                </select>
+
+                <label for="pLocation">Localização (Cidade)</label>
+                <input type="text" id="pLocation" placeholder="Ex: São Paulo" required>
+
+                <label for="pImgUrl">Link da Imagem (Opcional)</label>
+                <input type="url" id="pImgUrl" placeholder="Cole o link de uma foto da internet">
+
+                <button type="submit" class="btn-submit">Publicar Anúncio</button>
+            </form>
+        </div>
+    </div>
+
+    <footer class="main-footer">
+        <div class="container footer-content">
+            <p>&copy; 2026 DesapegaGeral. Todos os direitos reservados.</p>
+            <button id="adminAccessBtn" class="btn-admin-access">🔒 Painel Admin</button>
+        </div>
+    </footer>
+
+    <script type="module" src="script.js"></script>
+</body>
+</html>
