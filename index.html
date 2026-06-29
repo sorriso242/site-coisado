@@ -9,6 +9,16 @@
 </head>
 <body>
 
+    <div class="auth-bar">
+        <div class="container auth-flex">
+            <span id="userStatusText">Olá, visitante! Faça login para anunciar.</span>
+            <div class="auth-buttons">
+                <button id="btnShowLogin" class="btn-auth-nav">Entrar</button>
+                <button id="btnLogout" class="btn-auth-nav btn-logout" style="display: none;">Sair da Conta</button>
+            </div>
+        </div>
+    </div>
+
     <header class="main-header">
         <div class="header-container">
             <h1 class="logo">Desapega<span>Geral</span></h1>
@@ -33,7 +43,7 @@
             <div class="hero-content">
                 <h2>Desapegue do que não usa mais.<br>Encontre o que precisa.</h2>
                 <p id="heroSubtitle">O mercado de desapegos mais rápido, seguro e moderno do país.</p>
-                <button class="hero-btn" onclick="document.getElementById('openModalBtn').click()">Começar a Vender Agora</button>
+                <button class="hero-btn" id="heroStartBtn">Começar a Vender Agora</button>
             </div>
         </div>
     </section>
@@ -56,15 +66,13 @@
                 <h3 class="section-title">Anúncios em Destaque</h3>
                 <span id="adminBadge" class="admin-badge" style="display: none;">Modo Administrador Ativo</span>
             </div>
-            <div class="products-grid" id="productsGrid">
-                </div>
+            <div class="products-grid" id="productsGrid"></div>
         </div>
     </main>
 
     <main class="product-details-page" id="productDetailsPage" style="display: none;">
         <div class="container">
             <button class="btn-back" id="btnBackToList">← Voltar para os anúncios</button>
-            
             <div class="details-wrapper">
                 <div class="details-image-box">
                     <img src="" id="detailImg" alt="Imagem do Produto">
@@ -74,15 +82,33 @@
                     <h2 id="detailTitle" class="detail-main-title">Título do Produto</h2>
                     <p class="product-price" id="detailPrice">0</p>
                     <p class="product-location" id="detailLocation">📍 Localização</p>
-                    
                     <div class="seller-box">
                         <h5>Vendedor verificado</h5>
-                        <button class="btn-chat" onclick="alert('Chat iniciado com o vendedor! (Simulado)')">💬 Chat com o Vendedor</button>
+                        <button class="btn-chat" id="btnChatZap">💬 Chat com o Vendedor</button>
                     </div>
                 </div>
             </div>
         </div>
     </main>
+
+    <div class="modal-overlay" id="authModal">
+        <div class="modal-box auth-box">
+            <span class="close-modal" id="closeAuthModalBtn">&times;</span>
+            <h2 id="authModalTitle">Entrar na Sua Conta</h2>
+            <form id="authForm">
+                <label for="authEmail">E-mail</label>
+                <input type="email" id="authEmail" placeholder="seuemail@exemplo.com" required>
+
+                <label for="authPassword">Senha</label>
+                <input type="password" id="authPassword" placeholder="No mínimo 6 caracteres" required>
+
+                <button type="submit" class="btn-submit" id="btnAuthSubmit">Entrar</button>
+                <p class="auth-toggle-text">
+                    <span id="authToggleLink">Não tem conta? Cadastre-se aqui</span>
+                </p>
+            </form>
+        </div>
+    </div>
 
     <div class="modal-overlay" id="announceModal">
         <div class="modal-box">
@@ -94,6 +120,9 @@
 
                 <label for="pPrice" id="labelPrice">Preço (R$)</label>
                 <input type="text" id="pPrice" placeholder="0,00" required>
+
+                <label for="pPhone">WhatsApp do Vendedor (DDD + Número)</label>
+                <input type="text" id="pPhone" placeholder="Ex: 11999999999" required>
 
                 <label for="pCategory">Categoria</label>
                 <select id="pCategory">

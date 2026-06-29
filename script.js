@@ -1,6 +1,7 @@
-// 🔥 IMPORTAR FUNÇÕES DO FIREBASE DA CDN DA GOOGLE
+// 🔥 IMPORTAR FUNÇÕES DO FIREBASE E AUTHENTICATION DA CDN DA GOOGLE
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getFirestore, collection, addDoc, deleteDoc, doc, updateDoc, query, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
 // SUAS CHAVES DO FIREBASE CONFIGURADAS
 const firebaseConfig = {
@@ -12,9 +13,10 @@ const firebaseConfig = {
   appId: "1:855647834590:web:a59b8b150309a016a04d4f"
 };
 
-// Inicializar Firebase e Firestore (Nuvem)
+// Inicializar Firebase, Firestore e Auth
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const auth = getAuth(app);
 
 // Seleção de Elementos da Interface
 const openModalBtn = document.getElementById('openModalBtn');
@@ -28,6 +30,24 @@ const countrySelect = document.getElementById('countrySelect');
 const pPriceInput = document.getElementById('pPrice');
 const labelPrice = document.getElementById('labelPrice');
 const heroSubtitle = document.getElementById('heroSubtitle');
+const heroStartBtn = document.getElementById('heroStartBtn');
+const btnChatZap = document.getElementById('btnChatZap');
+
+// Elementos do Auth
+const authModal = document.getElementById('authModal');
+const btnShowLogin = document.getElementById('btnShowLogin');
+const btnLogout = document.getElementById('btnLogout');
+const closeAuthModalBtn = document.getElementById('closeAuthModalBtn');
+const authForm = document.getElementById('authForm');
+const authModalTitle = document.getElementById('authModalTitle');
+const btnAuthSubmit = document.getElementById('btnAuthSubmit');
+const authToggleLink = document.getElementById('authToggleLink');
+const userStatusText = document.getElementById('userStatusText');
+const authEmailInput = document.getElementById('authEmail');
+const authPasswordInput = document.getElementById('authPassword');
+
+let isLoginMode = true; 
+let usuarioLogado = null;
 
 const adminAccessBtn = document.getElementById('adminAccessBtn');
 const adminBadge = document.getElementById('adminBadge');
@@ -49,19 +69,91 @@ let paisAtual = localStorage.getItem('desapega_pais') || 'BR';
 countrySelect.value = paisAtual;
 let unsubscribeRealtime = null;
 
-// MÁSCARA DE FORMATAÇÃO DE MOEDA EM TEMPO REAL (Ex: 100.000.000)
-pPriceInput.addEventListener('input', (e) => {
-    let valor = e.target.value.replace(/\D/g, ""); // Remove tudo que não for número
-    
-    if (valor === "") {
-        e.target.value = "";
-        return;
+// MONITOR DE USUÁRIO LOGADO (TEMPO REAL)
+onAuthStateChanged(auth, (user) => {
+    if (user) {
+        usuarioLogado = user;
+        userStatusText.textContent = `Conectado como: ${user.email}`;
+        btnShowLogin.style.display = 'none';
+        btnLogout.style.display = 'inline-block';
+    } else {
+        usuarioLogado = null;
+        userStatusText.textContent = "Olá, visitante! Faça login para anunciar.";
+        btnShowLogin.style.display = 'inline-block';
+        btnLogout.style.display = 'none';
     }
+});
 
-    // Transforma em formato numérico decimal
+// LÓGICA DO FORMULÁRIO DE LOGIN / CADASTRO
+authToggleLink.addEventListener('click', () => {
+    isLoginMode = !isLoginMode;
+    if (isLoginMode) {
+        authModalTitle.textContent = "Entrar na Sua Conta";
+        btnAuthSubmit.textContent = "Entrar";
+        authToggleLink.textContent = "Não tem conta? Cadastre-se aqui";
+    } else {
+        authModalTitle.textContent = "Criar Nova Conta";
+        btnAuthSubmit.textContent = "Cadastrar Usuário";
+        authToggleLink.textContent = "Já tem uma conta? Faça login";
+    }
+});
+
+authForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = authEmailInput.value.trim();
+    const password = authPasswordInput.value;
+
+    try {
+        if (isLoginMode) {
+            await signInWithEmailAndPassword(auth, email, password);
+            alert("Login realizado com sucesso! 🎉");
+        } else {
+            await createUserWithEmailAndPassword(auth, email, password);
+            alert("Conta criada com sucesso! Você já está logado. 🚀");
+        }
+        authForm.reset();
+        authModal.classList.remove('active');
+    } catch (error) {
+        let msg = "Erro na autenticação: " + error.message;
+        if (error.code === 'auth/wrong-password') msg = "Senha incorreta!";
+        if (error.code === 'auth/user-not-found') msg = "Usuário não encontrado!";
+        if (error.code === 'auth/email-already-in-use') msg = "Este e-mail já está cadastrado!";
+        if (error.code === 'auth/weak-password') msg = "A senha precisa ter pelo menos 6 caracteres!";
+        alert(msg);
+    }
+});
+
+btnLogout.addEventListener('click', () => {
+    signOut(auth).then(() => alert("Você saiu da conta."));
+});
+
+// MODAL DE AUTH CONTROLES
+btnShowLogin.addEventListener('click', () => {
+    isLoginMode = true;
+    authModalTitle.textContent = "Entrar na Sua Conta";
+    btnAuthSubmit.textContent = "Entrar";
+    authToggleLink.textContent = "Não tem conta? Cadastre-se aqui";
+    authModal.classList.add('active');
+});
+closeAuthModalBtn.addEventListener('click', () => authModal.classList.remove('active'));
+
+// BLOQUEIO DE ANÚNCIO SE NÃO ESTIVER LOGADO
+function verificarAcessoAnuncio() {
+    if (!usuarioLogado) {
+        alert("🔒 Acesso negado! Você precisa criar uma conta ou fazer login para postar um desapego.");
+        btnShowLogin.click(); 
+    } else {
+        announceModal.classList.add('active');
+    }
+}
+openModalBtn.addEventListener('click', verificarAcessoAnuncio);
+heroStartBtn.addEventListener('click', verificarAcessoAnuncio);
+
+// MÁSCARA DE VALOR
+pPriceInput.addEventListener('input', (e) => {
+    let valor = e.target.value.replace(/\D/g, "");
+    if (valor === "") { e.target.value = ""; return; }
     let numero = (parseFloat(valor) / 100).toFixed(2);
-    
-    // Aplica a formatação visual baseada no país selecionado
     if (paisAtual === 'BR') {
         e.target.value = parseFloat(numero).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     } else {
@@ -69,11 +161,11 @@ pPriceInput.addEventListener('input', (e) => {
     }
 });
 
-// CONFIGURAR IDIOMA/MOEDA E SINCRONIZAR COM O FIREBASE EM TEMPO REAL
+// CONFIGURAR SINCRO
 function configurarPaisESincronizar(pais) {
     paisAtual = pais;
     localStorage.setItem('desapega_pais', pais);
-    pPriceInput.value = ""; // Limpa para evitar conflito de moedas
+    pPriceInput.value = "";
     
     if (pais === 'BR') {
         labelPrice.textContent = "Preço (R$)";
@@ -100,7 +192,6 @@ function configurarPaisESincronizar(pais) {
 
 countrySelect.addEventListener('change', (e) => configurarPaisESincronizar(e.target.value));
 
-// RENDERIZAR CARDS NO HTML
 function renderizarProdutos(lista) {
     productsGrid.innerHTML = '';
     const simboloMoeda = paisAtual === 'BR' ? 'R$' : '€';
@@ -110,6 +201,8 @@ function renderizarProdutos(lista) {
         novoCard.classList.add('product-card');
         novoCard.setAttribute('data-id', prod.id);
         novoCard.setAttribute('data-title', prod.titulo.toLowerCase());
+        // Guardando o telefone de forma oculta para ler depois ao clicar
+        novoCard.setAttribute('data-phone', prod.telefone || "");
 
         novoCard.innerHTML = `
             <button class="btn-delete-prod" style="display: ${isAdminMode ? 'block' : 'none'};" title="Apagar Anúncio">🗑️</button>
@@ -129,16 +222,14 @@ function renderizarProdutos(lista) {
 }
 
 configurarPaisESincronizar(paisAtual);
-
-// GESTÃO DO MODAL
-openModalBtn.addEventListener('click', () => {
-    pPriceInput.value = ""; 
-    announceModal.classList.add('active');
-});
 closeModalBtn.addEventListener('click', () => announceModal.classList.remove('active'));
-window.addEventListener('click', (e) => { if (e.target === announceModal) announceModal.classList.remove('active'); });
 
-// FILTROS DE BUSCA E CATEGORIA
+window.addEventListener('click', (e) => { 
+    if (e.target === announceModal) announceModal.classList.remove('active'); 
+    if (e.target === authModal) authModal.classList.remove('active');
+});
+
+// BUSCAS
 function filtrarProdutos() {
     voltarParaLista(); 
     const termoBusca = searchInput.value.toLowerCase().trim();
@@ -164,42 +255,31 @@ botoesCategorias.forEach(botao => {
     });
 });
 
-// EVENTOS NOS CARDS (VER DETALHES, APAGAR E EDITAR)
+// INTERAÇÃO CARDS
 productsGrid.addEventListener('click', async (e) => {
     const card = e.target.closest('.product-card');
     if (!card) return;
-    
     const idProd = card.getAttribute('data-id');
 
     if (e.target.classList.contains('btn-delete-prod')) {
         e.stopPropagation();
         if (confirm("Deseja realmente apagar este anúncio de forma GLOBAL?")) {
-            try {
-                await deleteDoc(doc(db, `anuncios_${paisAtual}`, idProd));
-            } catch (error) {
-                alert("Erro ao apagar da nuvem: " + error.message);
-            }
+            try { await deleteDoc(doc(db, `anuncios_${paisAtual}`, idProd)); } catch (error) { alert(error.message); }
         }
         return;
     }
 
     if (e.target.classList.contains('btn-edit-prod')) {
         e.stopPropagation();
-        const novoTitulo = prompt("Novo título do produto:");
-        const novoPreco = prompt("Novo preço (Use o formato formatado ex: 2.500,00):");
+        const novoTitulo = prompt("Novo título:");
+        const novoPreco = prompt("Novo preço:");
         const novaLocalidade = prompt("Nova cidade:");
-
-        const dadosAtualizados = {};
-        if (novoTitulo) dadosAtualizados.titulo = novoTitulo;
-        if (novoPreco) dadosAtualizados.preco = novoPreco;
-        if (novaLocalidade) dadosAtualizados.localizacao = "📍 " + novaLocalidade;
-
-        if (Object.keys(dadosAtualizados).length > 0) {
-            try {
-                await updateDoc(doc(db, `anuncios_${paisAtual}`, idProd), dadosAtualizados);
-            } catch (error) {
-                alert("Erro ao atualizar na nuvem: " + error.message);
-            }
+        const dados = {};
+        if (novoTitulo) dados.titulo = novoTitulo;
+        if (novoPreco) dados.preco = novoPreco;
+        if (novaLocalidade) dados.localizacao = "📍 " + novaLocalidade;
+        if (Object.keys(dados).length > 0) {
+            try { await updateDoc(doc(db, `anuncios_${paisAtual}`, idProd), dados); } catch (error) { alert(error.message); }
         }
         return;
     }
@@ -209,12 +289,25 @@ productsGrid.addEventListener('click', async (e) => {
     const local = card.querySelector('.product-location').textContent;
     const tag = card.querySelector('.product-tag').textContent;
     const imgSrc = card.querySelector('.product-img').src;
+    const numTelefone = card.getAttribute('data-phone').replace(/\D/g, ""); // Remove espaços e parênteses
 
     detailTitle.textContent = titulo;
     detailPrice.textContent = preco;
     detailLocation.textContent = local;
     detailTag.textContent = tag;
     detailImg.src = imgSrc;
+
+    // Configurar o link de redirecionamento dinâmico do WhatsApp
+    if (numTelefone) {
+        const textoZap = encodeURIComponent(`Olá! Vi seu anúncio do produto "${titulo}" por ${preco} no DesapegaGeral e tenho interesse! Ainda está disponível?`);
+        btnChatZap.onclick = () => {
+            window.open(`https://api.whatsapp.com/send?phone=${numTelefone}&text=${textoZap}`, '_blank');
+        };
+    } else {
+        btnChatZap.onclick = () => {
+            alert("Este vendedor não cadastrou um número de contato.");
+        };
+    }
 
     heroSection.style.display = 'none';
     categoriesSection.style.display = 'none';
@@ -232,26 +325,21 @@ function voltarParaLista() {
 btnBackToList.addEventListener('click', voltarParaLista);
 document.querySelector('.logo').addEventListener('click', voltarParaLista);
 
-// 🔥 ENVIAR NOVO ANÚNCIO PARA O CLOUD FIRESTORE
+// SALVAR ANÚNCIO
 announceForm.addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (!usuarioLogado) { alert("Sessão expirada. Faça login."); return; }
 
-    const titulo = document.getElementById('pTitle').value;
-    const preco = pPriceInput.value; // Salva o valor exatamente com os pontos inseridos na máscara
-    const categoria = document.getElementById('pCategory').value;
-    const localizacao = "📍 " + document.getElementById('pLocation').value;
-    let urlImagem = document.getElementById('pImgUrl').value.trim();
-
-    if (!urlImagem) {
-        urlImagem = "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=600&q=80";
-    }
+    const numTelefoneLimpo = document.getElementById('pPhone').value.replace(/\D/g, "");
 
     const novoProduto = {
-        titulo: titulo,
-        preco: preco,
-        categoria: categoria,
-        localizacao: localizacao,
-        imagem: urlImagem,
+        titulo: document.getElementById('pTitle').value,
+        preco: pPriceInput.value,
+        telefone: numTelefoneLimpo, // Salva o número inserido
+        categoria: document.getElementById('pCategory').value,
+        localizacao: "📍 " + document.getElementById('pLocation').value,
+        imagem: document.getElementById('pImgUrl').value.trim() || "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=600&q=80",
+        vendedorUid: usuarioLogado.uid, 
         timestamp: Date.now()
     };
 
@@ -260,43 +348,35 @@ announceForm.addEventListener('submit', async (e) => {
         announceForm.reset();
         announceModal.classList.remove('active');
         voltarParaLista();
-    } catch (error) {
-        alert("Erro ao salvar o anúncio na nuvem: " + error.message);
-    }
+    } catch (error) { alert(error.message); }
 });
 
-// 🔑 COMBINAÇÃO SECRETA PARA O ADMIN (Apenas você sabe)
-// Pressione simultaneamente no seu teclado: Ctrl + Shift + A
+// ADMIN SECRET (Ctrl + Shift + A)
 window.addEventListener('keydown', (e) => {
     if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'a') {
         e.preventDefault();
-        // Revela o botão secreto no rodapé da página
         if (adminAccessBtn.style.display === 'none') {
             adminAccessBtn.style.display = 'inline-block';
-            alert("🔒 Botão de acesso do Administrador revelado no rodapé!");
+            alert("🔒 Painel do Admin revelado no rodapé!");
         } else {
             adminAccessBtn.style.display = 'none';
         }
     }
 });
 
-// AÇÃO DO PAINEL ADMINISTRADOR (Senha: admin123)
 adminAccessBtn.addEventListener('click', () => {
     if (!isAdminMode) {
-        const senha = prompt("Digite a senha do Administrador:");
-        if (senha === "admin123") {
+        if (prompt("Senha do Administrador:") === "admin123") {
             isAdminMode = true;
             adminBadge.style.display = 'inline-block';
             adminAccessBtn.textContent = "🔓 Sair do Admin";
             configurarPaisESincronizar(paisAtual);
-        } else {
-            alert("Senha incorreta!");
-        }
+        } else { alert("Senha incorreta!"); }
     } else {
         isAdminMode = false;
         adminBadge.style.display = 'none';
         adminAccessBtn.textContent = "🔒 Painel Admin";
-        adminAccessBtn.style.display = 'none'; // Esconde o botão novamente ao sair
+        adminAccessBtn.style.display = 'none';
         configurarPaisESincronizar(paisAtual);
     }
 });
