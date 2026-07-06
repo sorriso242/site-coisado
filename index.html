@@ -13,6 +13,7 @@
         <div class="container auth-flex">
             <span id="userStatusText">Olá, visitante! Faça login para anunciar.</span>
             <div class="auth-buttons">
+                <button id="btnOpenMyChats" class="btn-chats-nav" style="display: none;">💬 Meus Chats</button>
                 <button id="btnCartToggle" class="btn-cart-nav">🛒 Carrinho (<span id="cartCount">0</span>)</button>
                 <button id="btnShowLogin" class="btn-auth-nav">Entrar / Cadastrar</button>
                 <button id="btnLogout" class="btn-auth-nav btn-logout" style="display: none;">Sair da Conta</button>
@@ -25,7 +26,7 @@
             <h1 class="logo">Desapega<span>Geral</span></h1>
             
             <div class="search-box">
-                <input type="text" id="searchInput" placeholder="O que você deseja comprar hoje?">
+                <input text="text" id="searchInput" placeholder="O que você deseja comprar hoje?">
                 <button id="searchBtn">Buscar</button>
             </div>
 
@@ -44,8 +45,7 @@
             <h3>Seu Carrinho</h3>
             <span class="close-cart" id="closeCartBtn">&times;</span>
         </div>
-        <div class="cart-items" id="cartItems">
-            </div>
+        <div class="cart-items" id="cartItems"></div>
         <div class="cart-footer">
             <div class="cart-total">
                 <span>Total:</span>
@@ -53,6 +53,28 @@
             </div>
             <button class="btn-checkout" id="btnCheckoutCart">Finalizar Compra via WhatsApp</button>
         </div>
+    </div>
+
+    <div class="chat-list-sidebar" id="chatListSidebar">
+        <div class="chat-list-header">
+            <h3>Suas Conversas</h3>
+            <span class="close-chat-list" id="closeChatListBtn">&times;</span>
+        </div>
+        <div class="chat-list-container" id="chatListInbox">
+            </div>
+    </div>
+
+    <div class="chat-window" id="chatWindow">
+        <div class="chat-window-header">
+            <h4 id="chatWithName">Vendedor</h4>
+            <span class="close-chat-window" id="closeChatWindowBtn">&times;</span>
+        </div>
+        <div class="chat-messages-box" id="chatMessagesBox">
+            </div>
+        <form class="chat-input-form" id="chatInputForm">
+            <input type="text" id="chatMessageInput" placeholder="Digite sua mensagem..." required autocomplete="off">
+            <button type="submit">Enviar</button>
+        </form>
     </div>
 
     <section class="hero-section">
@@ -102,7 +124,7 @@
                     <div class="seller-box">
                         <h5 id="detailSellerName">Vendedor verificado</h5>
                         <div class="details-action-buttons">
-                            <button class="btn-chat" id="btnChatZap">💬 Chat Direto</button>
+                            <button class="btn-chat" id="btnOpenInternalChat">💬 Chat com o Vendedor</button>
                             <button class="btn-add-cart-detail" id="btnAddToCartDetail">🛒 Adicionar ao Carrinho</button>
                         </div>
                     </div>
@@ -116,7 +138,6 @@
             <span class="close-modal" id="closeAuthModalBtn">&times;</span>
             <h2 id="authModalTitle">Entrar na Sua Conta</h2>
             <form id="authForm">
-                
                 <div id="registerFieldsWrap" style="display: none;">
                     <label for="authName">Seu Nome Completo</label>
                     <input type="text" id="authName" placeholder="Ex: Gabriel Silva">
