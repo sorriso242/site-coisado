@@ -1,9 +1,8 @@
-// 🔥 IMPORTAR FUNÇÕES DO FIREBASE E AUTHENTICATION DA CDN DA GOOGLE
+// 🔥 IMPORTAR FUNÇÕES DO FIREBASE E AUTHENTICATION
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getFirestore, collection, addDoc, deleteDoc, doc, updateDoc, query, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import { getFirestore, collection, addDoc, deleteDoc, doc, updateDoc, query, orderBy, onSnapshot, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
-// SUAS CHAVES DO FIREBASE CONFIGURADAS
 const firebaseConfig = {
   apiKey: "AIzaSyCVm5XjSiqAUopQ34ENu9-853YdmeMdfdM",
   authDomain: "desapegageral-90792.firebaseapp.com",
@@ -13,10 +12,10 @@ const firebaseConfig = {
   appId: "1:855647834590:web:a59b8b150309a016a04d4f"
 };
 
-// Inicializar Firebase, Firestore e Auth
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
+const googleProvider = new GoogleAuthProvider();
 
 // Seleção de Elementos da Interface
 const openModalBtn = document.getElementById('openModalBtn');
@@ -43,11 +42,28 @@ const authModalTitle = document.getElementById('authModalTitle');
 const btnAuthSubmit = document.getElementById('btnAuthSubmit');
 const authToggleLink = document.getElementById('authToggleLink');
 const userStatusText = document.getElementById('userStatusText');
+const registerFieldsWrap = document.getElementById('registerFieldsWrap');
+const authNameInput = document.getElementById('authName');
+const authPhoneInput = document.getElementById('authPhone');
+const authCityInput = document.getElementById('authCity');
 const authEmailInput = document.getElementById('authEmail');
 const authPasswordInput = document.getElementById('authPassword');
+const btnGoogleAuth = document.getElementById('btnGoogleAuth');
+
+// Elementos do Carrinho
+const btnCartToggle = document.getElementById('btnCartToggle');
+const cartSidebar = document.getElementById('cartSidebar');
+const closeCartBtn = document.getElementById('closeCartBtn');
+const cartItemsContainer = document.getElementById('cartItems');
+const cartCountLabel = document.getElementById('cartCount');
+const cartTotalValLabel = document.getElementById('cartTotalVal');
+const btnCheckoutCart = document.getElementById('btnCheckoutCart');
+const btnAddToCartDetail = document.getElementById('btnAddToCartDetail');
 
 let isLoginMode = true; 
 let usuarioLogado = null;
+let dadosPerfilLogado = null; // Guarda telefone e cidade da nuvem
+let carrinho = JSON.parse(localStorage.getItem('desapega_cart')) || [];
 
 const adminAccessBtn = document.getElementById('adminAccessBtn');
 const adminBadge = document.getElementById('adminBadge');
@@ -64,40 +80,60 @@ const detailTag = document.getElementById('detailTag');
 const detailTitle = document.getElementById('detailTitle');
 const detailPrice = document.getElementById('detailPrice');
 const detailLocation = document.getElementById('detailLocation');
+const detailSellerName = document.getElementById('detailSellerName');
 
+let itemSelecionadoParaCarrinho = null;
 let paisAtual = localStorage.getItem('desapega_pais') || 'BR';
 countrySelect.value = paisAtual;
 let unsubscribeRealtime = null;
 
-// MONITOR DE USUÁRIO LOGADO (TEMPO REAL)
-onAuthStateChanged(auth, (user) => {
+// MONITOR DE USUÁRIO LOGADO
+onAuthStateChanged(auth, async (user) => {
     if (user) {
         usuarioLogado = user;
-        userStatusText.textContent = `Conectado como: ${user.email}`;
+        // Puxar telefone e cidade complementares salvos no Firestore
+        const docRef = doc(db, "usuarios", user.uid);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+            dadosPerfilLogado = docSnap.data();
+        }
+        
+        const nomeParaMostrar = user.displayName || user.email;
+        userStatusText.textContent = `Conectado como: ${nomeParaMostrar}`;
         btnShowLogin.style.display = 'none';
         btnLogout.style.display = 'inline-block';
     } else {
         usuarioLogado = null;
+        dadosPerfilLogado = null;
         userStatusText.textContent = "Olá, visitante! Faça login para anunciar.";
         btnShowLogin.style.display = 'inline-block';
         btnLogout.style.display = 'none';
     }
 });
 
-// LÓGICA DO FORMULÁRIO DE LOGIN / CADASTRO
+// ALTERNAR ENTRE LOGIN E CADASTRO
 authToggleLink.addEventListener('click', () => {
     isLoginMode = !isLoginMode;
     if (isLoginMode) {
         authModalTitle.textContent = "Entrar na Sua Conta";
         btnAuthSubmit.textContent = "Entrar";
         authToggleLink.textContent = "Não tem conta? Cadastre-se aqui";
+        registerFieldsWrap.style.display = "none";
+        authNameInput.removeAttribute('required');
+        authPhoneInput.removeAttribute('required');
+        authCityInput.removeAttribute('required');
     } else {
         authModalTitle.textContent = "Criar Nova Conta";
         btnAuthSubmit.textContent = "Cadastrar Usuário";
         authToggleLink.textContent = "Já tem uma conta? Faça login";
+        registerFieldsWrap.style.display = "block";
+        authNameInput.setAttribute('required', 'true');
+        authPhoneInput.setAttribute('required', 'true');
+        authCityInput.setAttribute('required', 'true');
     }
 });
 
+// SUBMIT FORMULÁRIO DE AUTH
 authForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const email = authEmailInput.value.trim();
@@ -108,18 +144,57 @@ authForm.addEventListener('submit', async (e) => {
             await signInWithEmailAndPassword(auth, email, password);
             alert("Login realizado com sucesso! 🎉");
         } else {
-            await createUserWithEmailAndPassword(auth, email, password);
-            alert("Conta criada com sucesso! Você já está logado. 🚀");
+            const nome = authNameInput.value.trim();
+            const telefone = authPhoneInput.value.replace(/\D/g, "");
+            const cidade = authCityInput.value.trim();
+
+            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+            await updateProfile(userCredential.user, { displayName: nome });
+            
+            // Salva dados adicionais requeridos na coleção "usuarios"
+            await setDoc(doc(db, "usuarios", userCredential.user.uid), {
+                nome: nome,
+                telefone: telefone,
+                cidade: cidade,
+                email: email
+            });
+
+            dadosPerfilLogado = { nome, telefone, cidade };
+            alert(`Conta criada com sucesso! Bem-vindo(a), ${nome}! 🚀`);
         }
         authForm.reset();
         authModal.classList.remove('active');
     } catch (error) {
-        let msg = "Erro na autenticação: " + error.message;
-        if (error.code === 'auth/wrong-password') msg = "Senha incorreta!";
-        if (error.code === 'auth/user-not-found') msg = "Usuário não encontrado!";
-        if (error.code === 'auth/email-already-in-use') msg = "Este e-mail já está cadastrado!";
-        if (error.code === 'auth/weak-password') msg = "A senha precisa ter pelo menos 6 caracteres!";
-        alert(msg);
+        alert("Erro na autenticação: " + error.message);
+    }
+});
+
+// LOGIN COM O GOOGLE
+btnGoogleAuth.addEventListener('click', async () => {
+    try {
+        const resultado = await signInWithPopup(auth, googleProvider);
+        const user = resultado.user;
+        
+        // Verifica se o usuário do Google já tem dados extras, senão cria um padrão inicial
+        const docRef = doc(db, "usuarios", user.uid);
+        const docSnap = await getDoc(docRef);
+        if (!docSnap.exists()) {
+            let telPrompt = prompt("Insira seu número do WhatsApp com DDD para contato de vendas (Apenas números):") || "";
+            let cidPrompt = prompt("Insira sua Cidade:") || "Não Informada";
+            telPrompt = telPrompt.replace(/\D/g, "");
+
+            await setDoc(doc(db, "usuarios", user.uid), {
+                nome: user.displayName,
+                telefone: telPrompt,
+                cidade: cidPrompt,
+                email: user.email
+            });
+            dadosPerfilLogado = { nome: user.displayName, telefone: telPrompt, cidade: cidPrompt };
+        }
+        alert(`Conectado via Google como: ${user.displayName} 🎉`);
+        authModal.classList.remove('active');
+    } catch (error) {
+        alert("Erro ao logar com o Google: " + error.message);
     }
 });
 
@@ -127,20 +202,20 @@ btnLogout.addEventListener('click', () => {
     signOut(auth).then(() => alert("Você saiu da conta."));
 });
 
-// MODAL DE AUTH CONTROLES
 btnShowLogin.addEventListener('click', () => {
     isLoginMode = true;
     authModalTitle.textContent = "Entrar na Sua Conta";
     btnAuthSubmit.textContent = "Entrar";
     authToggleLink.textContent = "Não tem conta? Cadastre-se aqui";
+    registerFieldsWrap.style.display = "none";
     authModal.classList.add('active');
 });
 closeAuthModalBtn.addEventListener('click', () => authModal.classList.remove('active'));
 
-// BLOQUEIO DE ANÚNCIO SE NÃO ESTIVER LOGADO
+// BLOQUEIO DE ANÚNCIO
 function verificarAcessoAnuncio() {
     if (!usuarioLogado) {
-        alert("🔒 Acesso negado! Você precisa criar uma conta ou fazer login para postar um desapego.");
+        alert("🔒 Acesso negado! Você precisa preencher seu cadastro/login antes de postar um desapego.");
         btnShowLogin.click(); 
     } else {
         announceModal.classList.add('active');
@@ -161,7 +236,7 @@ pPriceInput.addEventListener('input', (e) => {
     }
 });
 
-// CONFIGURAR SINCRO
+// CONFIGURAR PAÍS E REALTIME
 function configurarPaisESincronizar(pais) {
     paisAtual = pais;
     localStorage.setItem('desapega_pais', pais);
@@ -169,11 +244,9 @@ function configurarPaisESincronizar(pais) {
     
     if (pais === 'BR') {
         labelPrice.textContent = "Preço (R$)";
-        document.getElementById('pLocation').placeholder = "Ex: São Paulo";
         heroSubtitle.textContent = "O mercado de desapegos mais rápido, seguro e moderno do Brasil.";
     } else {
         labelPrice.textContent = "Preço (€)";
-        document.getElementById('pLocation').placeholder = "Ex: Faro";
         heroSubtitle.textContent = "O mercado de desapegos mais rápido, seguro e moderno de Portugal.";
     }
 
@@ -189,7 +262,6 @@ function configurarPaisESincronizar(pais) {
         renderizarProdutos(listaProdutos);
     });
 }
-
 countrySelect.addEventListener('change', (e) => configurarPaisESincronizar(e.target.value));
 
 function renderizarProdutos(lista) {
@@ -201,8 +273,8 @@ function renderizarProdutos(lista) {
         novoCard.classList.add('product-card');
         novoCard.setAttribute('data-id', prod.id);
         novoCard.setAttribute('data-title', prod.titulo.toLowerCase());
-        // Guardando o telefone de forma oculta para ler depois ao clicar
-        novoCard.setAttribute('data-phone', prod.telefone || "");
+        novoCard.setAttribute('data-phone', prod.vendedorTelefone || "");
+        novoCard.setAttribute('data-seller-name', prod.vendedorNome || "Vendedor Verificado");
 
         novoCard.innerHTML = `
             <button class="btn-delete-prod" style="display: ${isAdminMode ? 'block' : 'none'};" title="Apagar Anúncio">🗑️</button>
@@ -220,16 +292,10 @@ function renderizarProdutos(lista) {
         productsGrid.appendChild(novoCard);
     });
 }
-
 configurarPaisESincronizar(paisAtual);
 closeModalBtn.addEventListener('click', () => announceModal.classList.remove('active'));
 
-window.addEventListener('click', (e) => { 
-    if (e.target === announceModal) announceModal.classList.remove('active'); 
-    if (e.target === authModal) authModal.classList.remove('active');
-});
-
-// BUSCAS
+// BUSCAS E FILTROS
 function filtrarProdutos() {
     voltarParaLista(); 
     const termoBusca = searchInput.value.toLowerCase().trim();
@@ -255,7 +321,7 @@ botoesCategorias.forEach(botao => {
     });
 });
 
-// INTERAÇÃO CARDS
+// CLIQUE NOS CARDS (ABRIR DETALHES)
 productsGrid.addEventListener('click', async (e) => {
     const card = e.target.closest('.product-card');
     if (!card) return;
@@ -269,44 +335,31 @@ productsGrid.addEventListener('click', async (e) => {
         return;
     }
 
-    if (e.target.classList.contains('btn-edit-prod')) {
-        e.stopPropagation();
-        const novoTitulo = prompt("Novo título:");
-        const novoPreco = prompt("Novo preço:");
-        const novaLocalidade = prompt("Nova cidade:");
-        const dados = {};
-        if (novoTitulo) dados.titulo = novoTitulo;
-        if (novoPreco) dados.preco = novoPreco;
-        if (novaLocalidade) dados.localizacao = "📍 " + novaLocalidade;
-        if (Object.keys(dados).length > 0) {
-            try { await updateDoc(doc(db, `anuncios_${paisAtual}`, idProd), dados); } catch (error) { alert(error.message); }
-        }
-        return;
-    }
-
     const titulo = card.querySelector('.product-title').textContent;
     const preco = card.querySelector('.product-price').textContent;
     const local = card.querySelector('.product-location').textContent;
     const tag = card.querySelector('.product-tag').textContent;
     const imgSrc = card.querySelector('.product-img').src;
-    const numTelefone = card.getAttribute('data-phone').replace(/\D/g, ""); // Remove espaços e parênteses
+    const numTelefone = card.getAttribute('data-phone').replace(/\D/g, "");
+    const nomeDoVendedor = card.getAttribute('data-seller-name');
 
     detailTitle.textContent = titulo;
     detailPrice.textContent = preco;
     detailLocation.textContent = local;
     detailTag.textContent = tag;
     detailImg.src = imgSrc;
+    detailSellerName.textContent = `Vendedor: ${nomeDoVendedor}`;
 
-    // Configurar o link de redirecionamento dinâmico do WhatsApp
+    // Guarda a referência do item atual para o botão do carrinho usar
+    itemSelecionadoParaCarrinho = { id: idProd, titulo, preco, telefone: numTelefone, imagem: imgSrc };
+
     if (numTelefone) {
-        const textoZap = encodeURIComponent(`Olá! Vi seu anúncio do produto "${titulo}" por ${preco} no DesapegaGeral e tenho interesse! Ainda está disponível?`);
+        const textoZap = encodeURIComponent(`Olá! Vi seu anúncio de "${titulo}" por ${preco} no DesapegaGeral e quero negociar!`);
         btnChatZap.onclick = () => {
             window.open(`https://api.whatsapp.com/send?phone=${numTelefone}&text=${textoZap}`, '_blank');
         };
     } else {
-        btnChatZap.onclick = () => {
-            alert("Este vendedor não cadastrou um número de contato.");
-        };
+        btnChatZap.onclick = () => { alert("Este vendedor não cadastrou contato."); };
     }
 
     heroSection.style.display = 'none';
@@ -325,21 +378,23 @@ function voltarParaLista() {
 btnBackToList.addEventListener('click', voltarParaLista);
 document.querySelector('.logo').addEventListener('click', voltarParaLista);
 
-// SALVAR ANÚNCIO
+// PUBLICAR NOVO ANÚNCIO (Dados automáticos do usuário logado)
 announceForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (!usuarioLogado) { alert("Sessão expirada. Faça login."); return; }
-
-    const numTelefoneLimpo = document.getElementById('pPhone').value.replace(/\D/g, "");
+    if (!usuarioLogado || !dadosPerfilLogado) { 
+        alert("Sessão ou dados do perfil ausentes. Por favor refaça o login."); 
+        return; 
+    }
 
     const novoProduto = {
         titulo: document.getElementById('pTitle').value,
         preco: pPriceInput.value,
-        telefone: numTelefoneLimpo, // Salva o número inserido
         categoria: document.getElementById('pCategory').value,
-        localizacao: "📍 " + document.getElementById('pLocation').value,
         imagem: document.getElementById('pImgUrl').value.trim() || "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=600&q=80",
+        localizacao: "📍 " + (dadosPerfilLogado.cidade || "Brasil"),
         vendedorUid: usuarioLogado.uid, 
+        vendedorNome: dadosPerfilLogado.nome || usuarioLogado.displayName || usuarioLogado.email,
+        vendedorTelefone: dadosPerfilLogado.telefone || "",
         timestamp: Date.now()
     };
 
@@ -348,22 +403,86 @@ announceForm.addEventListener('submit', async (e) => {
         announceForm.reset();
         announceModal.classList.remove('active');
         voltarParaLista();
+        alert("Anúncio publicado com sucesso com seus dados de perfil! 🚀");
     } catch (error) { alert(error.message); }
 });
+
+// --- LÓGICA CORE DO CARRINHO DE COMPRAS ---
+function atualizarInterfaceCarrinho() {
+    cartItemsContainer.innerHTML = "";
+    let totalAcumulado = 0;
+
+    carrinho.forEach((item, index) => {
+        // Converte string de preço limpa para cálculo rápido
+        const nPreco = parseFloat(item.preco.replace(/[^\d,.]/g, "").replace(".", "").replace(",", "."));
+        totalAcumulado += isNaN(nPreco) ? 0 : nPreco;
+
+        const divItem = document.createElement('div');
+        divItem.classList.add('cart-item-row');
+        divItem.innerHTML = `
+            <img src="${item.imagem}" alt="">
+            <div class="cart-item-info">
+                <h4>${item.titulo}</h4>
+                <p>${item.preco}</p>
+            </div>
+            <span class="remove-cart-item" data-index="${index}">&times;</span>
+        `;
+        cartItemsContainer.appendChild(divItem);
+    });
+
+    cartCountLabel.textContent = carrinho.length;
+    const moeda = paisAtual === 'BR' ? 'R$' : '€';
+    cartTotalValLabel.textContent = `${moeda} ${totalAcumulado.toLocaleString(paisAtual === 'BR' ? 'pt-BR' : 'pt-PT', { minimumFractionDigits: 2 })}`;
+    localStorage.setItem('desapega_cart', JSON.stringify(carrinho));
+}
+
+// Botão Adicionar ao Carrinho (Tela de Detalhes)
+btnAddToCartDetail.addEventListener('click', () => {
+    if (itemSelecionadoParaCarrinho) {
+        carrinho.push(itemSelecionadoParaCarrinho);
+        atualizarInterfaceCarrinho();
+        alert("Produto adicionado ao seu carrinho! 🛒");
+        cartSidebar.classList.add('active'); // Abre a barra lateral do carrinho
+    }
+});
+
+// Remover item do carrinho
+cartItemsContainer.addEventListener('click', (e) => {
+    if (e.target.classList.contains('remove-cart-item')) {
+        const index = e.target.getAttribute('data-index');
+        carrinho.splice(index, 1);
+        atualizarInterfaceCarrinho();
+    }
+});
+
+// Abrir/Fechar Carrinho Lateral
+btnCartToggle.addEventListener('click', () => cartSidebar.classList.add('active'));
+closeCartBtn.addEventListener('click', () => cartSidebar.classList.remove('active'));
+
+// Finalizar pedido enviando a lista condensada para o WhatsApp do suporte do Marketplace
+btnCheckoutCart.addEventListener('click', () => {
+    if (carrinho.length === 0) { alert("Seu carrinho está vazio!"); return; }
+    
+    let mensagemPedido = "🛍️ *Novo Pedido - DesapegaGeral*\n\nGostaria de comprar estes itens:\n";
+    carrinho.forEach((item, i) => {
+        mensagemPedido += `\n${i+1}) *${item.titulo}* - ${item.preco}\n   Contato do Vendedor: wa.me/${item.telefone}\n`;
+    });
+    mensagemPedido += `\n*Total Geral:* ${cartTotalValLabel.textContent}`;
+    
+    // Altere este número abaixo (5511999999999) para o número que vai gerenciar ou intermediar as compras do site se quiser
+    window.open(`https://api.whatsapp.com/send?phone=5511999999999&text=${encodeURIComponent(mensagemPedido)}`, '_blank');
+});
+
+// Inicializa carrinho
+atualizarInterfaceCarrinho();
 
 // ADMIN SECRET (Ctrl + Shift + A)
 window.addEventListener('keydown', (e) => {
     if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'a') {
         e.preventDefault();
-        if (adminAccessBtn.style.display === 'none') {
-            adminAccessBtn.style.display = 'inline-block';
-            alert("🔒 Painel do Admin revelado no rodapé!");
-        } else {
-            adminAccessBtn.style.display = 'none';
-        }
+        adminAccessBtn.style.display = adminAccessBtn.style.display === 'none' ? 'inline-block' : 'none';
     }
 });
-
 adminAccessBtn.addEventListener('click', () => {
     if (!isAdminMode) {
         if (prompt("Senha do Administrador:") === "admin123") {
@@ -371,12 +490,11 @@ adminAccessBtn.addEventListener('click', () => {
             adminBadge.style.display = 'inline-block';
             adminAccessBtn.textContent = "🔓 Sair do Admin";
             configurarPaisESincronizar(paisAtual);
-        } else { alert("Senha incorreta!"); }
+        }
     } else {
         isAdminMode = false;
         adminBadge.style.display = 'none';
         adminAccessBtn.textContent = "🔒 Painel Admin";
-        adminAccessBtn.style.display = 'none';
         configurarPaisESincronizar(paisAtual);
     }
 });
