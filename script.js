@@ -17,7 +17,7 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const googleProvider = new GoogleAuthProvider();
 
-// Seleção de Elementos
+// Seleção de Elementos da Interface
 const openModalBtn = document.getElementById('openModalBtn');
 const closeModalBtn = document.getElementById('closeModalBtn');
 const announceModal = document.getElementById('announceModal');
@@ -31,7 +31,7 @@ const labelPrice = document.getElementById('labelPrice');
 const heroSubtitle = document.getElementById('heroSubtitle');
 const heroStartBtn = document.getElementById('heroStartBtn');
 
-// Auth Elementos
+// Elementos do Auth
 const authModal = document.getElementById('authModal');
 const btnShowLogin = document.getElementById('btnShowLogin');
 const btnLogout = document.getElementById('btnLogout');
@@ -49,7 +49,7 @@ const authEmailInput = document.getElementById('authEmail');
 const authPasswordInput = document.getElementById('authPassword');
 const btnGoogleAuth = document.getElementById('btnGoogleAuth');
 
-// Carrinho Elementos
+// Elementos do Carrinho
 const btnCartToggle = document.getElementById('btnCartToggle');
 const cartSidebar = document.getElementById('cartSidebar');
 const closeCartBtn = document.getElementById('closeCartBtn');
@@ -59,7 +59,7 @@ const cartTotalValLabel = document.getElementById('cartTotalVal');
 const btnCheckoutCart = document.getElementById('btnCheckoutCart');
 const btnAddToCartDetail = document.getElementById('btnAddToCartDetail');
 
-// CHAT ELEMENTOS NOVOS
+// Elementos do Chat Interno
 const btnOpenMyChats = document.getElementById('btnOpenMyChats');
 const chatListSidebar = document.getElementById('chatListSidebar');
 const closeChatListBtn = document.getElementById('closeChatListBtn');
@@ -102,11 +102,27 @@ let paisAtual = localStorage.getItem('desapega_pais') || 'BR';
 countrySelect.value = paisAtual;
 let unsubscribeRealtime = null;
 
+// ATALHO SECRETO PARA ADMIN: CTRL + SHIFT + S
+window.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        isAdminMode = !isAdminMode;
+        if (adminBadge) adminBadge.style.display = isAdminMode ? 'inline-block' : 'none';
+        if (adminAccessBtn) adminAccessBtn.style.display = isAdminMode ? 'inline-block' : 'none';
+        
+        // Atualiza a visibilidade dos botões de lixeira nos cards atuais
+        const lixeiras = document.querySelectorAll('.btn-delete-prod');
+        lixeiras.forEach(btn => btn.style.display = isAdminMode ? 'block' : 'none');
+        
+        alert(isAdminMode ? "Modo Administrador Ativado! 🔒" : "Modo Administrador Desativado! 🔓");
+    }
+});
+
 // MONITOR DE USUÁRIO LOGADO
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         usuarioLogado = user;
-        btnOpenMyChats.style.display = 'inline-block';
+        if (btnOpenMyChats) btnOpenMyChats.style.display = 'inline-block';
         const docRef = doc(db, "usuarios", user.uid);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) dadosPerfilLogado = docSnap.data();
@@ -118,9 +134,9 @@ onAuthStateChanged(auth, async (user) => {
     } else {
         usuarioLogado = null;
         dadosPerfilLogado = null;
-        btnOpenMyChats.style.display = 'none';
-        chatListSidebar.classList.remove('active');
-        chatWindow.classList.remove('active');
+        if (btnOpenMyChats) btnOpenMyChats.style.display = 'none';
+        if (chatListSidebar) chatListSidebar.classList.remove('active');
+        if (chatWindow) chatWindow.classList.remove('active');
         userStatusText.textContent = "Olá, visitante! Faça login para anunciar.";
         btnShowLogin.style.display = 'inline-block';
         btnLogout.style.display = 'none';
@@ -144,7 +160,7 @@ authToggleLink.addEventListener('click', () => {
     }
 });
 
-// FORMULÁRIO AUTH EMAIL/SENHA
+// SUBMIT DO FORMULÁRIO DE AUTENTICAÇÃO (EMAIL/SENHA) - COM TRAVA DE ERRO
 authForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const email = authEmailInput.value.trim();
@@ -159,8 +175,16 @@ authForm.addEventListener('submit', async (e) => {
             const telefone = authPhoneInput.value.replace(/\D/g, "");
             const city = authCityInput.value.trim();
 
-            if (!nome || telefone.length < 10 || !city) {
-                alert("❌ Erro: Todos os dados cadastrais são obrigatórios!");
+            if (!nome || nome.length < 3) {
+                alert("❌ Erro de Cadastro: Você precisa inserir seu nome completo para criar a conta!");
+                return;
+            }
+            if (!telefone || telefone.length < 10) {
+                alert("❌ Erro de Cadastro: Você precisa inserir um número de WhatsApp válido com DDD!");
+                return;
+            }
+            if (!city || city.length < 2) {
+                alert("❌ Erro de Cadastro: Você precisa preencher a sua cidade para continuar!");
                 return;
             }
 
@@ -168,51 +192,138 @@ authForm.addEventListener('submit', async (e) => {
             await updateProfile(userCredential.user, { displayName: nome });
             
             await setDoc(doc(db, "usuarios", userCredential.user.uid), {
-                nome, telefone, cidade: city, email
+                nome: nome,
+                telefone: telefone,
+                cidade: city,
+                email: email
             });
 
             dadosPerfilLogado = { nome, telefone, cidade: city };
-            alert(`Conta criada com sucesso! 🚀`);
+            alert(`Conta criada com sucesso! Bem-vindo(a), ${nome}! 🚀`);
         }
         authForm.reset();
         authModal.classList.remove('active');
-    } catch (error) { alert(error.message); }
+    } catch (error) {
+        let msg = "Erro na autenticação: " + error.message;
+        if (error.code === 'auth/email-already-in-use') msg = "❌ Este e-mail já está sendo usado por outra conta!";
+        if (error.code === 'auth/weak-password') msg = "❌ A senha precisa ter pelo menos 6 caracteres!";
+        if (error.code === 'auth/invalid-email') msg = "❌ O endereço de e-mail inserido é inválido!";
+        alert(msg);
+    }
 });
 
-// GOOGLE AUTH
+// LOGIN COM O GOOGLE - COM VALIDAÇÃO OBRIGATORIEDADE DE DADOS
 btnGoogleAuth.addEventListener('click', async () => {
     try {
         const resultado = await signInWithPopup(auth, googleProvider);
         const user = resultado.user;
+        
         const docRef = doc(db, "usuarios", user.uid);
         const docSnap = await getDoc(docRef);
         
         if (!docSnap.exists()) {
-            let telPrompt = prompt("Insira seu WhatsApp com DDD:") || "";
-            let cidPrompt = prompt("Insira sua Cidade:") || "Londrina";
+            let telPrompt = "";
+            let cidPrompt = "";
+
+            while (!telPrompt || telPrompt.replace(/\D/g, "").length < 10) {
+                telPrompt = prompt("⚠️ Cadastro Incompleto!\nInsira seu WhatsApp com DDD para ativar sua conta:");
+                if (telPrompt === null) {
+                    await signOut(auth);
+                    alert("❌ Cadastro cancelado. É necessário informar os dados.");
+                    return;
+                }
+            }
+            const telefoneLimpo = telPrompt.replace(/\D/g, "");
+
+            while (!cidPrompt || cidPrompt.trim().length < 2) {
+                cidPrompt = prompt("⚠️ Cadastro Incompleto!\nInsira a sua Cidade para continuar:");
+                if (cidPrompt === null) {
+                    await signOut(auth);
+                    alert("❌ Cadastro cancelado. É necessário informar os dados.");
+                    return;
+                }
+            }
+            const cidadeLimpa = cidPrompt.trim();
+
             await setDoc(doc(db, "usuarios", user.uid), {
-                nome: user.displayName, telefone: telPrompt.replace(/\D/g, ""), cidade: cidPrompt, email: user.email
+                nome: user.displayName,
+                telefone: telefoneLimpo,
+                cidade: cidadeLimpa,
+                email: user.email
             });
-            dadosPerfilLogado = { nome: user.displayName, telefone: telPrompt, cidade: cidPrompt };
+            
+            dadosPerfilLogado = { nome: user.displayName, telefone: telefoneLimpo, cidade: cidadeLimpa };
+        } else {
+            dadosPerfilLogado = docSnap.data();
         }
+        
+        alert(`Conectado via Google como: ${user.displayName} 🎉`);
         authModal.classList.remove('active');
-    } catch (error) { alert(error.message); }
+    } catch (error) {
+        if (error.code !== 'auth/cancelled-popup-request') {
+            alert("Erro ao logar com o Google: " + error.message);
+        }
+    }
 });
 
-btnLogout.addEventListener('click', () => signOut(auth));
-btnShowLogin.addEventListener('click', () => { isLoginMode = true; authModal.classList.add('active'); });
-closeAuthModalBtn.addEventListener('click', () => authModal.classList.remove('active'));
+btnLogout.addEventListener('click', () => {
+    signOut(auth).then(() => alert("Você saiu da conta."));
+});
 
-// CONFIGURAR PAÍS E REALTIME DE PRODUTOS
+// BLOQUEIO E VERIFICAÇÃO DE ANÚNCIO
+function verificarAcessoAnuncio() {
+    if (!usuarioLogado) {
+        alert("🔒 Acesso negado! Você precisa preencher seu cadastro/login antes de postar um desapego.");
+        isLoginMode = true;
+        authModalTitle.textContent = "Entrar na Sua Conta";
+        btnAuthSubmit.textContent = "Entrar";
+        authToggleLink.textContent = "Não tem conta? Cadastre-se aqui";
+        registerFieldsWrap.style.display = "none";
+        authModal.classList.add('active'); 
+    } else {
+        announceModal.classList.add('active');
+    }
+}
+
+// ATRIBUINDO CLIQUE AOS BOTÕES DE ANÚNCIO PRINCIPAIS
+if (openModalBtn) openModalBtn.addEventListener('click', verificarAcessoAnuncio);
+if (heroStartBtn) heroStartBtn.addEventListener('click', verificarAcessoAnuncio);
+
+// MÁSCARA DE VALOR
+pPriceInput.addEventListener('input', (e) => {
+    let valor = e.target.value.replace(/\D/g, "");
+    if (valor === "") { e.target.value = ""; return; }
+    let numero = (parseFloat(valor) / 100).toFixed(2);
+    if (paisAtual === 'BR') {
+        e.target.value = parseFloat(numero).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    } else {
+        e.target.value = parseFloat(numero).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+});
+
+// CONFIGURAR PAÍS E REALTIME DE ANÚNCIOS
 function configurarPaisESincronizar(pais) {
     paisAtual = pais;
     localStorage.setItem('desapega_pais', pais);
+    if (pPriceInput) pPriceInput.value = "";
+    
+    if (pais === 'BR') {
+        if (labelPrice) labelPrice.textContent = "Preço (R$)";
+        if (heroSubtitle) heroSubtitle.textContent = "O mercado de desapegos mais rápido, seguro e moderno do Brasil.";
+    } else {
+        if (labelPrice) labelPrice.textContent = "Preço (€)";
+        if (heroSubtitle) heroSubtitle.textContent = "O mercado de desapegos mais rápido, seguro e moderno de Portugal.";
+    }
+
     if (unsubscribeRealtime) unsubscribeRealtime();
 
     const q = query(collection(db, `anuncios_${paisAtual}`), orderBy("timestamp", "desc"));
+    
     unsubscribeRealtime = onSnapshot(q, (snapshot) => {
         const listaProdutos = [];
-        snapshot.forEach((doc) => { listaProdutos.push({ id: doc.id, ...doc.data() }); });
+        snapshot.forEach((doc) => {
+            listaProdutos.push({ id: doc.id, ...doc.data() });
+        });
         renderizarProdutos(listaProdutos);
     });
 }
@@ -221,16 +332,17 @@ countrySelect.addEventListener('change', (e) => configurarPaisESincronizar(e.tar
 function renderizarProdutos(lista) {
     productsGrid.innerHTML = '';
     const simboloMoeda = paisAtual === 'BR' ? 'R$' : '€';
+
     lista.forEach(prod => {
         const novoCard = document.createElement('div');
         novoCard.classList.add('product-card');
         novoCard.setAttribute('data-id', prod.id);
         novoCard.setAttribute('data-title', prod.titulo.toLowerCase());
         novoCard.setAttribute('data-seller-uid', prod.vendedorUid || "");
-        novoCard.setAttribute('data-seller-name', prod.vendedorNome || "Vendedor");
+        novoCard.setAttribute('data-seller-name', prod.vendedorNome || "Vendedor Verificado");
 
         novoCard.innerHTML = `
-            <button class="btn-delete-prod" style="display: ${isAdminMode ? 'block' : 'none'};">🗑️</button>
+            <button class="btn-delete-prod" style="display: ${isAdminMode ? 'block' : 'none'};" title="Apagar Anúncio">🗑️</button>
             <div class="product-image-wrap">
                 <img src="${prod.imagem}" alt="${prod.titulo}" class="product-img">
                 <span class="product-tag">${prod.categoria}</span>
@@ -245,94 +357,137 @@ function renderizarProdutos(lista) {
     });
 }
 configurarPaisESincronizar(paisAtual);
+if (closeModalBtn) closeModalBtn.addEventListener('click', () => announceModal.classList.remove('active'));
 
-// CLIQUE NO CARD DO PRODUTO
-productsGrid.addEventListener('click', (e) => {
+// BUSCAS E FILTROS DO COMPONENTE DE CRIAÇÃO
+function filtrarProdutos() {
+    voltarParaLista(); 
+    const termoBusca = searchInput.value.toLowerCase().trim();
+    const cards = document.querySelectorAll('.product-card');
+    cards.forEach(card => {
+        const tituloProduto = card.getAttribute('data-title').toLowerCase();
+        card.style.display = tituloProduto.includes(termoBusca) ? 'block' : 'none';
+    });
+}
+if (searchBtn) searchBtn.addEventListener('click', filtrarProdutos);
+if (searchInput) searchInput.addEventListener('input', filtrarProdutos);
+
+// CORREÇÃO: BOTÕES DE SELEÇÃO DE CATEGORIAS
+const botoesCategorias = document.querySelectorAll('.category-card');
+botoesCategorias.forEach(botao => {
+    botao.addEventListener('click', () => {
+        voltarParaLista();
+        const categoriaSelecionada = botao.textContent.replace(/[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDC00-\uDFFF]/g, "").trim();
+        const cards = document.querySelectorAll('.product-card');
+        cards.forEach(card => {
+            const tagProduto = card.querySelector('.product-tag').textContent.trim();
+            card.style.display = (tagProduto === categoriaSelecionada) ? 'block' : 'none';
+        });
+    });
+});
+
+// CORREÇÃO: VOLTAR PARA LISTA COMPLETA
+function voltarParaLista() {
+    productDetailsPage.style.display = 'none';
+    heroSection.style.display = 'block';
+    categoriesSection.style.display = 'block';
+    productsSection.style.display = 'block';
+    
+    const cards = document.querySelectorAll('.product-card');
+    cards.forEach(card => card.style.display = 'block');
+    if (searchInput) searchInput.value = "";
+}
+if (btnBackToList) btnBackToList.addEventListener('click', voltarParaLista);
+
+// CORREÇÃO: CLIQUE NA LOGO DO SITE
+const logoBtn = document.querySelector('.logo');
+if (logoBtn) logoBtn.addEventListener('click', voltarParaLista);
+
+// CLIQUE NOS CARDS (ABRIR DETALHES)
+productsGrid.addEventListener('click', async (e) => {
     const card = e.target.closest('.product-card');
-    if (!card || e.target.classList.contains('btn-delete-prod')) return;
-
+    if (!card) return;
     const idProd = card.getAttribute('data-id');
-    const title = card.querySelector('.product-title').textContent;
-    const price = card.querySelector('.product-price').textContent;
-    const loc = card.querySelector('.product-location').textContent;
+
+    if (e.target.classList.contains('btn-delete-prod')) {
+        e.stopPropagation();
+        if (confirm("Deseja realmente apagar este anúncio de forma GLOBAL?")) {
+            try { await deleteDoc(doc(db, `anuncios_${paisAtual}`, idProd)); } catch (error) { alert(error.message); }
+        }
+        return;
+    }
+
+    const titulo = card.querySelector('.product-title').textContent;
+    const preco = card.querySelector('.product-price').textContent;
+    const local = card.querySelector('.product-location').textContent;
     const tag = card.querySelector('.product-tag').textContent;
-    const img = card.querySelector('.product-img').src;
+    const imgSrc = card.querySelector('.product-img').src;
     const sellerUid = card.getAttribute('data-seller-uid');
-    const sellerName = card.getAttribute('data-seller-name');
+    const nomeDoVendedor = card.getAttribute('data-seller-name');
 
-    detailTitle.textContent = title;
-    detailPrice.textContent = price;
-    detailLocation.textContent = loc;
+    detailTitle.textContent = titulo;
+    detailPrice.textContent = preco;
+    detailLocation.textContent = local;
     detailTag.textContent = tag;
-    detailImg.src = img;
-    detailSellerName.textContent = `Vendedor: ${sellerName}`;
+    detailImg.src = imgSrc;
+    detailSellerName.textContent = `Vendedor: ${nomeDoVendedor}`;
 
-    itemSelecionadoParaCarrinho = { id: idProd, titulo: title, preco: price, imagem: img };
+    itemSelecionadoParaCarrinho = { id: idProd, titulo, preco, imagem: imgSrc };
 
-    // Configuração do Botão de Chat Interno
+    // Configuração do clique no chat interno
     btnOpenInternalChat.onclick = () => {
         if (!usuarioLogado) {
             alert("🔒 Faça login para iniciar um chat com o vendedor!");
-            btnShowLogin.click();
+            verificarAcessoAnuncio();
             return;
         }
         if (usuarioLogado.uid === sellerUid) {
-            alert("Você não pode abrir um chat com você mesmo.");
+            alert("Você não pode abrir uma conversa com você mesmo.");
             return;
         }
-        // ID único do canal gerado combinando os dois UIDs organizados alfabeticamente
         const chatId = usuarioLogado.uid < sellerUid ? `${usuarioLogado.uid}_${sellerUid}` : `${sellerUid}_${usuarioLogado.uid}`;
-        abrirJanelaDeConversa(chatId, sellerName, sellerUid);
+        abrirJanelaDeConversa(chatId, nomeDoVendedor, sellerUid);
     };
 
     heroSection.style.display = 'none';
     categoriesSection.style.display = 'none';
     productsSection.style.display = 'none';
     productDetailsPage.style.display = 'block';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 
-function voltarParaLista() {
-    productDetailsPage.style.display = 'none';
-    heroSection.style.display = 'block';
-    categoriesSection.style.display = 'block';
-    productsSection.style.display = 'block';
-}
-btnBackToList.addEventListener('click', voltarParaLista);
-
-// SALVAR NOVO ANÚNCIO
-openModalBtn.addEventListener('click', () => { if(usuarioLogado) { announceModal.classList.add('active'); } else { btnShowLogin.click(); } });
-closeModalBtn.addEventListener('click', () => announceModal.classList.remove('active'));
+// PUBLICAR NOVO ANÚNCIO
 announceForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const pPriceInput = document.getElementById('pPrice');
+    if (!usuarioLogado) return;
+
     const novoProduto = {
         titulo: document.getElementById('pTitle').value,
         preco: pPriceInput.value,
         categoria: document.getElementById('pCategory').value,
         imagem: document.getElementById('pImgUrl').value.trim() || "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=600&q=80",
         localizacao: "📍 " + (dadosPerfilLogado?.cidade || "Brasil"),
-        vendedorUid: usuarioLogado.uid,
+        vendedorUid: usuarioLogado.uid, 
         vendedorNome: dadosPerfilLogado?.nome || usuarioLogado.displayName || usuarioLogado.email,
         timestamp: Date.now()
     };
+
     try {
         await addDoc(collection(db, `anuncios_${paisAtual}`), novoProduto);
         announceForm.reset();
         announceModal.classList.remove('active');
         voltarParaLista();
-    } catch(err) { alert(err.message); }
+        alert("Anúncio publicado com sucesso! 🚀");
+    } catch (error) { alert(error.message); }
 });
 
 // =========================================================================
-// SINDROME DO CHAT REALTIME - LÓGICA CORE DO CHAT INTERNO
+// LÓGICA DO CHAT INTERNO EM TEMPO REAL
 // =========================================================================
+if (btnOpenMyChats) btnOpenMyChats.addEventListener('click', () => chatListSidebar.classList.add('active'));
+if (closeChatListBtn) closeChatListBtn.addEventListener('click', () => chatListSidebar.classList.remove('active'));
+if (closeChatWindowBtn) closeChatWindowBtn.addEventListener('click', () => chatWindow.classList.remove('active'));
 
-// Abrir e fechar a caixa lateral dos meus chats
-btnOpenMyChats.addEventListener('click', () => chatListSidebar.classList.add('active'));
-closeChatListBtn.addEventListener('click', () => chatListSidebar.classList.remove('active'));
-closeChatWindowBtn.addEventListener('click', () => chatWindow.classList.remove('active'));
-
-// Sincronizar todos os chats que o usuário logado está participando
 function sincronizarCaixaDeEntradaChat() {
     if (!usuarioLogado) return;
     const q = query(collection(db, "chats"), where("participantes", "array-contains", usuarioLogado.uid));
@@ -347,8 +502,7 @@ function sincronizarCaixaDeEntradaChat() {
             const dadosChat = docSnap.data();
             const idChat = docSnap.id;
             
-            // Descobrir qual dos nomes não é o do usuário logado
-            const outroNome = dadosChat.nomesParticipantes[0] === usuarioLogado.displayName ? dadosChat.nomesParticipantes[1] : dadosChat.nomesParticipantes[0];
+            const outroNome = dadosChat.nomesParticipantes[0] === (usuarioLogado.displayName || usuarioLogado.email) ? dadosChat.nomesParticipantes[1] : dadosChat.nomesParticipantes[0];
             const outroUid = dadosChat.participantes[0] === usuarioLogado.uid ? dadosChat.participantes[1] : dadosChat.participantes[0];
 
             const divCanal = document.createElement('div');
@@ -369,14 +523,12 @@ function sincronizarCaixaDeEntradaChat() {
     });
 }
 
-// Abrir a caixinha de texto flutuante e puxar as mensagens em tempo real
 async function abrirJanelaDeConversa(chatId, nomeDoOutro, uidDoOutro) {
     currentChatId = chatId;
     chatWithNameLabel.textContent = nomeDoOutro;
     chatWindow.classList.add('active');
-    chatMessagesBox.innerHTML = "<p class='loading-chat'>Carregando mensagens...</p>";
+    chatMessagesBox.innerHTML = "<p class='loading-chat'>Carregando...</p>";
 
-    // Criar ou atualizar os cabeçalhos do chat na coleção global de conversas
     await setDoc(doc(db, "chats", chatId), {
         participantes: [usuarioLogado.uid, uidDoOutro],
         nomesParticipantes: [usuarioLogado.displayName || usuarioLogado.email, nomeDoOutro],
@@ -385,7 +537,6 @@ async function abrirJanelaDeConversa(chatId, nomeDoOutro, uidDoOutro) {
 
     if (unsubscribeMessages) unsubscribeMessages();
 
-    // Puxar mensagens ordenadas por tempo
     const msgQuery = query(collection(db, `chats/${chatId}/mensagens`), orderBy("timestamp", "asc"));
     unsubscribeMessages = onSnapshot(msgQuery, (snapshot) => {
         chatMessagesBox.innerHTML = "";
@@ -393,22 +544,20 @@ async function abrirJanelaDeConversa(chatId, nomeDoOutro, uidDoOutro) {
             const msgData = mDoc.data();
             const balao = document.createElement('div');
             balao.classList.add('message-bubble');
-            // Se o uid do remetente for igual ao meu, joga o balão pra direita
             balao.classList.add(msgData.remetenteId === usuarioLogado.uid ? 'me' : 'other');
             balao.textContent = msgData.texto;
             chatMessagesBox.appendChild(balao);
         });
-        chatMessagesBox.scrollTop = chatMessagesBox.scrollHeight; // Rola o chat pro final
+        chatMessagesBox.scrollTop = chatMessagesBox.scrollHeight;
     });
 }
 
-// Enviar mensagem pelo formulário do chat
 chatInputForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const textoMsg = chatMessageInput.value.trim();
     if (!textoMsg || !currentChatId) return;
 
-    chatMessageInput.value = ""; // Limpa o campo na hora
+    chatMessageInput.value = "";
 
     const novaMensagem = {
         texto: textoMsg,
@@ -418,37 +567,42 @@ chatInputForm.addEventListener('submit', async (e) => {
     };
 
     try {
-        // Salva a mensagem na subcoleção interna do canal
         await addDoc(collection(db, `chats/${currentChatId}/mensagens`), novaMensagem);
-        // Atualiza o resumo da conversa no nó pai
         await updateDoc(doc(db, "chats", currentChatId), {
             ultimaMensagem: textoMsg,
             timestampUltima: Date.now()
         });
-    } catch (err) { console.error("Erro ao enviar mensagem: ", err); }
+    } catch (err) { console.error(err); }
 });
 
 // --- LÓGICA DO CARRINHO ---
 function atualizarInterfaceCarrinho() {
     cartItemsContainer.innerHTML = "";
-    let total = 0;
+    let totalAcumulado = 0;
+
     carrinho.forEach((item, index) => {
         const nPreco = parseFloat(item.preco.replace(/[^\d,.]/g, "").replace(".", "").replace(",", "."));
-        total += isNaN(nPreco) ? 0 : nPreco;
+        totalAcumulado += isNaN(nPreco) ? 0 : nPreco;
+
         const divItem = document.createElement('div');
         divItem.classList.add('cart-item-row');
         divItem.innerHTML = `
             <img src="${item.imagem}" alt="">
-            <div class="cart-item-info"><h4>${item.titulo}</h4><p>${item.preco}</p></div>
+            <div class="cart-item-info">
+                <h4>${item.titulo}</h4>
+                <p>${item.preco}</p>
+            </div>
             <span class="remove-cart-item" data-index="${index}">&times;</span>
         `;
         cartItemsContainer.appendChild(divItem);
     });
+
     cartCountLabel.textContent = carrinho.length;
     const moeda = paisAtual === 'BR' ? 'R$' : '€';
-    cartTotalValLabel.textContent = `${moeda} ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+    cartTotalValLabel.textContent = `${moeda} ${totalAcumulado.toLocaleString(paisAtual === 'BR' ? 'pt-BR' : 'pt-PT', { minimumFractionDigits: 2 })}`;
     localStorage.setItem('desapega_cart', JSON.stringify(carrinho));
 }
+
 btnAddToCartDetail.addEventListener('click', () => {
     if (itemSelecionadoParaCarrinho) {
         carrinho.push(itemSelecionadoParaCarrinho);
@@ -456,12 +610,15 @@ btnAddToCartDetail.addEventListener('click', () => {
         cartSidebar.classList.add('active');
     }
 });
+
 cartItemsContainer.addEventListener('click', (e) => {
     if (e.target.classList.contains('remove-cart-item')) {
-        carrinho.splice(e.target.getAttribute('data-index'), 1);
+        const index = e.target.getAttribute('data-index');
+        carrinho.splice(index, 1);
         atualizarInterfaceCarrinho();
     }
 });
+
 btnCartToggle.addEventListener('click', () => cartSidebar.classList.add('active'));
 closeCartBtn.addEventListener('click', () => cartSidebar.classList.remove('active'));
 atualizarInterfaceCarrinho();
